@@ -18,8 +18,7 @@ const http = require("http");
 const server = http.createServer(app);
 
 server.listen(PORT, HOST, () => {
-  console.log(`Server is running, accessible via http://192.168.100.68:${PORT} (and other interfaces if present)`);
-  console.log(`Printer endpoint should still target: http://192.168.100.68:${PORT}/api/printer/get-job`);
+  console.log('Server is running');
 });
 
 app.use("/api/printer", require("./routes/printRoutes"));
