@@ -7,17 +7,22 @@ const getPrintJob = (req, res) => {
   const { ConnectionType } = req.body; // ConnectionType is in the body
   const PrinterID = req.query.printerId; // PrinterID is now from the URL query parameter
 
+  console.log(`[${new Date().toISOString()}] Received request: ConnectionType=${ConnectionType}, PrinterID=${PrinterID}`);
+
   if (ConnectionType === 'GetRequest') {
     if (!PrinterID) {
+      console.log(`[${new Date().toISOString()}] GetRequest received without PrinterID. Sending no-job response.`);
       // To maintain compatibility or handle errors, you might send a default response
       // or an error. For now, we'll just log it and send a no-job response.
       const noJobXml = `<?xml version="1.0" encoding="utf-8"?><PrintRequestInfo><ePOSPrint><Parameter><devid>local_printer</devid><timeout>5000</timeout></Parameter><PrintData /></ePOSPrint></PrintRequestInfo>`;
       return res.set("Content-Type", "text/xml;charset=utf-8").status(400).send(noJobXml);
     }
     
+    console.log(`[${new Date().toISOString()}] Checking for jobs for PrinterID: ${PrinterID}`);
     // Check if the specific queue for this printer exists and has jobs
     if (printerQueues[PrinterID] && printerQueues[PrinterID].length > 0) {
       const jobPayload = printerQueues[PrinterID].shift(); // Get job from the specific queue
+      console.log(`[${new Date().toISOString()}] Sending job to PrinterID: ${PrinterID}. Jobs remaining: ${printerQueues[PrinterID].length}`);
       
       const fullResponseXml = `<?xml version="1.0" encoding="utf-8"?>
 <PrintRequestInfo>
@@ -35,6 +40,7 @@ const getPrintJob = (req, res) => {
       res.set("Content-Type", "text/xml;charset=utf-8");
       res.status(200).send(fullResponseXml);
     } else {
+      console.log(`[${new Date().toISOString()}] No jobs for PrinterID: ${PrinterID}. Sending no-job response.`);
       const noJobXml = `<?xml version="1.0" encoding="utf-8"?>
 <PrintRequestInfo>
     <ePOSPrint>
@@ -50,18 +56,20 @@ const getPrintJob = (req, res) => {
     }
   } else if (ConnectionType === 'SetResponse') {
     const responseFile = req.body.ResponseFile;
+    console.log(`[${new Date().toISOString()}] Received SetResponse from printer. Response:`, responseFile);
 
     // Return empty response as per manual
     res.set("Content-Type", "text/xml;charset=utf-8");
     res.status(200).send('');
   } else if (ConnectionType === 'SetStatus') {
     // The printer sends status updates without the query parameter.
+    console.log(`[${new Date().toISOString()}] Received SetStatus from printer.`);
     // We don't need the ID for this, just to acknowledge the request.
     // Acknowledge the status update with an empty success response as per docs
     res.set("Content-Type", "text/xml;charset=utf-8");
     res.status(200).send('');
   } else {
-    console.error("Unknown ConnectionType:", ConnectionType);
+    console.error(`[${new Date().toISOString()}] Unknown ConnectionType:`, ConnectionType);
     res.status(400).send('Unknown ConnectionType');
   }
 };
@@ -94,11 +102,12 @@ const addTestPrintJob = (req, res) => {
 
 // 🚀 NEW: Add order from restaurant management backend
 const addOrderPrintJob = (req, res) => {
+  console.log(`[${new Date().toISOString()}] Received request to add order print job.`);
   try {
     const { restaurantId, ...orderData } = req.body; // Extract restaurantId from the body
 
     if (!restaurantId) {
-      console.error("Error: No restaurantId provided with the order.");
+      console.error(`[${new Date().toISOString()}] Error: No restaurantId provided with the order.`);
       return res.status(400).json({
         success: false,
         error: "Missing restaurantId",
@@ -125,6 +134,8 @@ const addOrderPrintJob = (req, res) => {
     
     const queuePosition = printerQueues[restaurantId].length;
     
+    console.log(`[${new Date().toISOString()}] Order for restaurant ${restaurantId} added to queue. Queue size: ${queuePosition}`);
+    
     // Respond immediately to restaurant backend
     res.status(201).json({
       success: true,
@@ -135,7 +146,7 @@ const addOrderPrintJob = (req, res) => {
     });
     
   } catch (error) {
-    console.error("Error adding order to print queue:", error);
+    console.error(`[${new Date().toISOString()}] Error adding order to print queue:`, error);
     res.status(500).json({
       success: false,
       error: "Failed to queue print job",
