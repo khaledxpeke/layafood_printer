@@ -1,15 +1,24 @@
-// In-memory queue for print jobs (for local testing)
+// In-memory queue for print jobs, now structured by restaurant/printer ID.
 // In a production environment, you'd use a database or a persistent message queue.
-let printQueue = [];
+let printerQueues = {};
 
 // Controller to handle both print job requests and printing results
 const getPrintJob = (req, res) => {
-  const connectionType = req.body.ConnectionType;
-  
-  if (connectionType === 'GetRequest') {
-    console.log("Received request for print job");
-    if (printQueue.length > 0) {
-      const jobPayload = printQueue.shift();
+  const { ConnectionType } = req.body; // ConnectionType is in the body
+  const PrinterID = req.query.printerId; // PrinterID is now from the URL query parameter
+
+  if (ConnectionType === 'GetRequest') {
+    if (!PrinterID) {
+      // To maintain compatibility or handle errors, you might send a default response
+      // or an error. For now, we'll just log it and send a no-job response.
+      const noJobXml = `<?xml version="1.0" encoding="utf-8"?><PrintRequestInfo><ePOSPrint><Parameter><devid>local_printer</devid><timeout>5000</timeout></Parameter><PrintData /></ePOSPrint></PrintRequestInfo>`;
+      return res.set("Content-Type", "text/xml;charset=utf-8").status(400).send(noJobXml);
+    }
+    
+    // Check if the specific queue for this printer exists and has jobs
+    if (printerQueues[PrinterID] && printerQueues[PrinterID].length > 0) {
+      const jobPayload = printerQueues[PrinterID].shift(); // Get job from the specific queue
+      
       const fullResponseXml = `<?xml version="1.0" encoding="utf-8"?>
 <PrintRequestInfo>
     <ePOSPrint>
@@ -26,7 +35,6 @@ const getPrintJob = (req, res) => {
       res.set("Content-Type", "text/xml;charset=utf-8");
       res.status(200).send(fullResponseXml);
     } else {
-      console.log("No print job available for printer.");
       const noJobXml = `<?xml version="1.0" encoding="utf-8"?>
 <PrintRequestInfo>
     <ePOSPrint>
@@ -40,43 +48,63 @@ const getPrintJob = (req, res) => {
       res.set("Content-Type", "text/xml;charset=utf-8");
       res.status(200).send(noJobXml);
     }
-  } else if (connectionType === 'SetResponse') {
-    console.log("Received printing result from printer");
+  } else if (ConnectionType === 'SetResponse') {
     const responseFile = req.body.ResponseFile;
-    
-    // Return empty response as per manual (page 50)
+
+    // Return empty response as per manual
+    res.set("Content-Type", "text/xml;charset=utf-8");
+    res.status(200).send('');
+  } else if (ConnectionType === 'SetStatus') {
+    // The printer sends status updates without the query parameter.
+    // We don't need the ID for this, just to acknowledge the request.
+    // Acknowledge the status update with an empty success response as per docs
     res.set("Content-Type", "text/xml;charset=utf-8");
     res.status(200).send('');
   } else {
-    console.log("Unknown ConnectionType:", connectionType);
+    console.error("Unknown ConnectionType:", ConnectionType);
     res.status(400).send('Unknown ConnectionType');
   }
 };
 
 const addTestPrintJob = (req, res) => {
-    const testJobPayload = `<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">
-<text>TEST PRINT&#10;</text>
+  const { restaurantId } = req.body; // Expect a restaurantId for testing
+  if (!restaurantId) {
+    return res.status(400).send({ message: "Please provide a 'restaurantId' for the test job." });
+  }
+
+  const testJobPayload = `<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">
+<text>TEST PRINT FOR ${restaurantId.toUpperCase()}&#10;</text>
 <text>Hello World!&#10;</text>
 <text>Time: ${new Date().toLocaleString()}&#10;</text>
 <feed line="2"/>
 <cut/>
 </epos-print>`;
 
-  printQueue.push(testJobPayload);
-  console.log("Added test job to queue");
+  // Initialize queue if it doesn't exist
+  if (!printerQueues[restaurantId]) {
+    printerQueues[restaurantId] = [];
+  }
+
+  printerQueues[restaurantId].push(testJobPayload);
   res.status(201).send({
-    message: "Test job added to queue",
-    currentQueueSize: printQueue.length,
+    message: `Test job added to queue for [${restaurantId}]`,
+    currentQueueSize: printerQueues[restaurantId].length,
   });
 };
 
 // 🚀 NEW: Add order from restaurant management backend
 const addOrderPrintJob = (req, res) => {
   try {
-    const orderData = req.body;
-    
-    // Log the received order
-    console.log(`📥 Received order #${orderData.commandNumber} from restaurant backend`);
+    const { restaurantId, ...orderData } = req.body; // Extract restaurantId from the body
+
+    if (!restaurantId) {
+      console.error("Error: No restaurantId provided with the order.");
+      return res.status(400).json({
+        success: false,
+        error: "Missing restaurantId",
+        message: "A restaurantId must be provided to queue a print job."
+      });
+    }
     
     // Use the pre-formatted XML from restaurant backend if available
     let printJobPayload;
@@ -87,10 +115,15 @@ const addOrderPrintJob = (req, res) => {
       printJobPayload = generateOrderPrintXml(orderData);
     }
     
-    // Add to print queue
-    printQueue.push(printJobPayload);
+    // Initialize the queue for the restaurant if it doesn't exist
+    if (!printerQueues[restaurantId]) {
+      printerQueues[restaurantId] = [];
+    }
     
-    console.log(`✅ Added order #${orderData.commandNumber} to print queue (position: ${printQueue.length})`);
+    // Add to the specific restaurant's print queue
+    printerQueues[restaurantId].push(printJobPayload);
+    
+    const queuePosition = printerQueues[restaurantId].length;
     
     // Respond immediately to restaurant backend
     res.status(201).json({
@@ -98,7 +131,7 @@ const addOrderPrintJob = (req, res) => {
       message: "Order queued for printing",
       orderId: orderData.orderId,
       commandNumber: orderData.commandNumber,
-      queuePosition: printQueue.length
+      queuePosition: queuePosition
     });
     
   } catch (error) {
