@@ -29,7 +29,7 @@ const getPrintJob = (req, res) => {
     <ePOSPrint>
         <Parameter>
             <devid>local_printer</devid>
-            <timeout>5000</timeout>
+            <timeout>30000</timeout>
         </Parameter>
         <PrintData>
             ${jobPayload}
@@ -46,7 +46,7 @@ const getPrintJob = (req, res) => {
     <ePOSPrint>
         <Parameter>
             <devid>local_printer</devid>
-            <timeout>5000</timeout>
+            <timeout>30000</timeout>
         </Parameter>
         <PrintData />
     </ePOSPrint>
