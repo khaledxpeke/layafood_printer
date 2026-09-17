@@ -4,10 +4,18 @@ let printerQueues = {};
 
 // Controller to handle both print job requests and printing results
 const getPrintJob = (req, res) => {
-  const { ConnectionType } = req.body; // ConnectionType is in the body
-  const PrinterID = req.query.printerId; // PrinterID is now from the URL query parameter
+  if (req.method === "HEAD") {
+    res.set("Content-Type", "text/xml;charset=utf-8");
+    return res.status(200).end();
+  }
 
-  console.log(`[${new Date().toISOString()}] Received request: ConnectionType=${ConnectionType}, PrinterID=${PrinterID}`);
+  const ConnectionType =
+    req.body?.ConnectionType ||
+    req.query.ConnectionType ||
+    (req.method === "GET" ? "GetRequest" : undefined);
+  const PrinterID = req.query.printerId || req.body?.PrinterID || req.body?.printerId;
+
+  console.log(`[${new Date().toISOString()}] Received request: ${req.method} ConnectionType=${ConnectionType}, PrinterID=${PrinterID}`);
 
   if (ConnectionType === 'GetRequest') {
     if (!PrinterID) {
