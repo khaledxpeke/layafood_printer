@@ -104,7 +104,15 @@ const addTestPrintJob = (req, res) => {
 const addOrderPrintJob = (req, res) => {
   console.log(`[${new Date().toISOString()}] Received request to add order print job.`);
   try {
-    const { restaurantId, ...orderData } = req.body; // Extract restaurantId from the body
+    const { restaurantId: rawRestaurantId, ...orderData } = req.body || {};
+    const restaurantId =
+      rawRestaurantId && typeof rawRestaurantId === "object"
+        ? String(rawRestaurantId._id || rawRestaurantId)
+        : rawRestaurantId;
+
+    console.log(
+      `[${new Date().toISOString()}] add-order keys=${Object.keys(req.body || {}).join(",") || "(none)"} hasPrintXml=${Boolean(orderData.printXml)} total=${orderData.total}`
+    );
 
     if (!restaurantId) {
       console.error(`[${new Date().toISOString()}] Error: No restaurantId provided with the order.`);
@@ -156,12 +164,18 @@ const addOrderPrintJob = (req, res) => {
 };
 
 // Generate XML from order data (fallback function)
+function money(value) {
+  return (Number(value) || 0).toFixed(2);
+}
+
 function generateOrderPrintXml(orderData) {
-  const items = orderData.items || [];
+  const items = orderData.items || orderData.product || [];
   
   const itemsXml = items.map(item => {
-    let itemText = `<text>${item.plat.name} x${item.plat.count || 1}</text>
-<text align="right">€${(item.plat.price * (item.plat.count || 1)).toFixed(2)}</text>`;
+    const plat = item.plat || {};
+    const count = plat.count || 1;
+    let itemText = `<text>${plat.name || "Article"} x${count}</text>
+<text align="right">€${money((Number(plat.price) || 0) * count)}</text>`;
     
     // Add variation if exists
     if (item.variation) {
@@ -173,7 +187,7 @@ function generateOrderPrintXml(orderData) {
     if (item.addons) {
       item.addons.forEach(addon => {
         itemText += `<text>  + ${addon.name} x${addon.count}</text>
-<text align="right">€${(addon.price * addon.count).toFixed(2)}</text>`;
+<text align="right">€${money((Number(addon.price) || 0) * (addon.count || 1))}</text>`;
       });
     }
     
@@ -181,7 +195,7 @@ function generateOrderPrintXml(orderData) {
     if (item.extras) {
       item.extras.forEach(extra => {
         itemText += `<text>  + ${extra.name} x${extra.count}</text>
-<text align="right">€${(extra.price * extra.count).toFixed(2)}</text>`;
+<text align="right">€${money((Number(extra.price) || 0) * (extra.count || 1))}</text>`;
       });
     }
     
