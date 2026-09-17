@@ -188,11 +188,14 @@ function generateOrderPrintXml(orderData) {
     return itemText;
   }).join('<feed line="1"/>');
 
+  const total = Number(orderData.total) || 0;
+  const createdAt = orderData.createdAt ? new Date(orderData.createdAt) : new Date();
+
   return `<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">
-<text align="center" width="2" height="2">** COMMANDE #${orderData.commandNumber} **</text>
+<text align="center" width="2" height="2">** COMMANDE #${orderData.commandNumber || "?"} **</text>
 <feed line="1"/>
-<text>Date: ${new Date(orderData.createdAt).toLocaleString('fr-FR')}</text>
-<text>Client: ${orderData.customerName}</text>
+<text>Date: ${createdAt.toLocaleString('fr-FR')}</text>
+<text>Client: ${orderData.customerName || "N/A"}</text>
 <text>Mode: ${orderData.pack ? orderData.pack.label : 'N/A'}</text>
 <text>Paiement: ${orderData.method ? orderData.method.label : 'N/A'}</text>
 <feed line="1"/>
@@ -201,7 +204,7 @@ function generateOrderPrintXml(orderData) {
 ${itemsXml}
 <feed line="1"/>
 <text>------------------------</text>
-<text align="center" width="2" height="1">TOTAL: €${orderData.total.toFixed(2)}</text>
+<text align="center" width="2" height="1">TOTAL: €${total.toFixed(2)}</text>
 <feed line="2"/>
 <cut/>
 </epos-print>`;
