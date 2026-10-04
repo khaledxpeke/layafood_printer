@@ -267,7 +267,7 @@ ${itemsXml}
 const listPrintQueue = (req, res) => {
   const { restaurantId } = req.params;
   const queue = printerQueues[restaurantId] || [];
-  res.status(200).json({ jobs: queue.map(publicJob) });
+  res.status(200).json({ jobs: queue.map(publicJob).reverse() });
 };
 
 const setPrintJobDisabled = (req, res) => {
