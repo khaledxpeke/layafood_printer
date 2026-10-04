@@ -1,6 +1,41 @@
+const { randomUUID } = require("crypto");
+
 // In-memory queue for print jobs, now structured by restaurant/printer ID.
 // In a production environment, you'd use a database or a persistent message queue.
 let printerQueues = {};
+
+function enqueue(restaurantId, printXml, meta = {}) {
+  if (!printerQueues[restaurantId]) {
+    printerQueues[restaurantId] = [];
+  }
+  const total = Number(meta.total);
+  const job = {
+    id: randomUUID(),
+    printXml,
+    disabled: false,
+    createdAt: new Date().toISOString(),
+    orderId: meta.orderId ? String(meta.orderId) : "",
+    commandNumber: meta.commandNumber ?? null,
+    customerName: meta.customerName || "",
+    total: Number.isFinite(total) ? total : null,
+    source: meta.source || "",
+  };
+  printerQueues[restaurantId].push(job);
+  return job;
+}
+
+function publicJob(job) {
+  return {
+    id: job.id,
+    commandNumber: job.commandNumber,
+    customerName: job.customerName,
+    total: job.total,
+    source: job.source,
+    disabled: job.disabled,
+    createdAt: job.createdAt,
+    orderId: job.orderId,
+  };
+}
 
 // Controller to handle both print job requests and printing results
 const getPrintJob = (req, res) => {
@@ -27,10 +62,12 @@ const getPrintJob = (req, res) => {
     }
     
     console.log(`[${new Date().toISOString()}] Checking for jobs for PrinterID: ${PrinterID}`);
-    // Check if the specific queue for this printer exists and has jobs
-    if (printerQueues[PrinterID] && printerQueues[PrinterID].length > 0) {
-      const jobPayload = printerQueues[PrinterID].shift(); // Get job from the specific queue
-      console.log(`[${new Date().toISOString()}] Sending job to PrinterID: ${PrinterID}. Jobs remaining: ${printerQueues[PrinterID].length}`);
+    const queue = printerQueues[PrinterID] || [];
+    const nextIndex = queue.findIndex((job) => !job.disabled);
+    if (nextIndex >= 0) {
+      const job = queue.splice(nextIndex, 1)[0];
+      const jobPayload = job.printXml;
+      console.log(`[${new Date().toISOString()}] Sending job to PrinterID: ${PrinterID}. Jobs remaining: ${queue.length}`);
       
       const fullResponseXml = `<?xml version="1.0" encoding="utf-8"?>
 <PrintRequestInfo>
@@ -96,12 +133,7 @@ const addTestPrintJob = (req, res) => {
 <cut/>
 </epos-print>`;
 
-  // Initialize queue if it doesn't exist
-  if (!printerQueues[restaurantId]) {
-    printerQueues[restaurantId] = [];
-  }
-
-  printerQueues[restaurantId].push(testJobPayload);
+  enqueue(restaurantId, testJobPayload, { source: "test", customerName: "Test" });
   res.status(201).send({
     message: `Test job added to queue for [${restaurantId}]`,
     currentQueueSize: printerQueues[restaurantId].length,
@@ -140,13 +172,13 @@ const addOrderPrintJob = (req, res) => {
       printJobPayload = generateOrderPrintXml(orderData);
     }
     
-    // Initialize the queue for the restaurant if it doesn't exist
-    if (!printerQueues[restaurantId]) {
-      printerQueues[restaurantId] = [];
-    }
-    
-    // Add to the specific restaurant's print queue
-    printerQueues[restaurantId].push(printJobPayload);
+    enqueue(restaurantId, printJobPayload, {
+      orderId: orderData.orderId,
+      commandNumber: orderData.commandNumber,
+      customerName: orderData.customerName,
+      total: orderData.total,
+      source: orderData.source,
+    });
     
     const queuePosition = printerQueues[restaurantId].length;
     
@@ -232,10 +264,39 @@ ${itemsXml}
 </epos-print>`;
 }
 
+const listPrintQueue = (req, res) => {
+  const { restaurantId } = req.params;
+  const queue = printerQueues[restaurantId] || [];
+  res.status(200).json({ jobs: queue.map(publicJob) });
+};
+
+const setPrintJobDisabled = (req, res) => {
+  const { restaurantId, jobId } = req.params;
+  const queue = printerQueues[restaurantId] || [];
+  const job = queue.find((item) => item.id === jobId);
+  if (!job) {
+    return res.status(404).json({ message: "Job not found" });
+  }
+  job.disabled = req.body?.disabled === true || req.body?.disabled === "true";
+  res.status(200).json({ job: publicJob(job) });
+};
+
+const removePrintJob = (req, res) => {
+  const { restaurantId, jobId } = req.params;
+  const queue = printerQueues[restaurantId] || [];
+  const index = queue.findIndex((item) => item.id === jobId);
+  if (index < 0) {
+    return res.status(404).json({ message: "Job not found" });
+  }
+  queue.splice(index, 1);
+  res.status(200).json({ success: true });
+};
+
 module.exports = {
   getPrintJob,
   addTestPrintJob,
   addOrderPrintJob,
-  // We can export the queue if needed for other modules, e.g., historyController
-  // getPrintQueue: () => printQueue // Example
+  listPrintQueue,
+  setPrintJobDisabled,
+  removePrintJob,
 };

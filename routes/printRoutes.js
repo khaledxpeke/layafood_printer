@@ -12,5 +12,9 @@ router.post('/add-test-job', printerController.addTestPrintJob);
 // 🚀 NEW: Endpoint to receive orders from restaurant management backend
 router.post('/add-order', printerController.addOrderPrintJob);
 
+router.get('/queue/:restaurantId', printerController.listPrintQueue);
+router.patch('/queue/:restaurantId/:jobId', printerController.setPrintJobDisabled);
+router.delete('/queue/:restaurantId/:jobId', printerController.removePrintJob);
+
 
 module.exports = router;
