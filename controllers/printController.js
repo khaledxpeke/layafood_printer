@@ -292,6 +292,16 @@ const removePrintJob = (req, res) => {
   res.status(200).json({ success: true });
 };
 
+const removePrintJobsByOrder = (req, res) => {
+  const { restaurantId, orderId } = req.params;
+  const queue = printerQueues[restaurantId] || [];
+  const target = String(orderId || "");
+  const kept = queue.filter((item) => item.orderId !== target);
+  const removed = queue.length - kept.length;
+  printerQueues[restaurantId] = kept;
+  res.status(200).json({ success: true, removed });
+};
+
 module.exports = {
   getPrintJob,
   addTestPrintJob,
@@ -299,4 +309,5 @@ module.exports = {
   listPrintQueue,
   setPrintJobDisabled,
   removePrintJob,
+  removePrintJobsByOrder,
 };

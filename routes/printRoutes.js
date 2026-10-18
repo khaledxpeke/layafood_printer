@@ -13,6 +13,7 @@ router.post('/add-test-job', printerController.addTestPrintJob);
 router.post('/add-order', printerController.addOrderPrintJob);
 
 router.get('/queue/:restaurantId', printerController.listPrintQueue);
+router.delete('/queue/:restaurantId/order/:orderId', printerController.removePrintJobsByOrder);
 router.patch('/queue/:restaurantId/:jobId', printerController.setPrintJobDisabled);
 router.delete('/queue/:restaurantId/:jobId', printerController.removePrintJob);
 
