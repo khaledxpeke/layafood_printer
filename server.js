@@ -5,7 +5,7 @@ const axios = require('axios');
 const { exec } = require("child_process");
 const fs = require("fs");
 
-const PORT = 3301;
+const PORT = Number(process.env.PORT) || 3301;
 const HOST = '0.0.0.0'; // Listen on all available network interfaces
 
 app.use(express.json());
