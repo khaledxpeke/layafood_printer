@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const printerController = require('../controllers/printController');
 
-// TM boxes probe with HEAD/GET, then poll with POST
+// TM boxes probe with HEAD/GET, then poll with POST.
+// Some devices call /api/printer/ instead of /api/printer/get-job.
+router.head('/', printerController.getPrintJob);
+router.get('/', printerController.getPrintJob);
+router.post('/', printerController.getPrintJob);
 router.head('/get-job', printerController.getPrintJob);
 router.get('/get-job', printerController.getPrintJob);
 router.post('/get-job', printerController.getPrintJob);
